@@ -280,6 +280,16 @@ export default function BusBoard() {
   const isLoading = etaQueries.some((q) => q.isLoading);
   const isError = etaQueries.every((q) => q.isError);
   const isFetching = etaQueries.some((q) => q.isFetching);
+  const minibusSources = ROUTE_SOURCES
+    .map((src, i) => ({ src, query: etaQueries[i] }))
+    .filter(({ src }) => src.type === "minibus");
+  const hasMinibusError = minibusSources.some(({ query }) => query.isError);
+  const unavailableMinibusRoutes = [...new Set(minibusSources.map(({ src }) => src.displayRoute))]
+    .filter((route) => {
+      const queries = minibusSources.filter(({ src }) => src.displayRoute === route);
+      return queries.every(({ query }) => !query.isLoading && !query.isError &&
+        !(query.data ?? []).some((entry) => entry.eta));
+    });
 
   function refetchAll() {
     etaQueries.forEach((q) => q.refetch());
@@ -362,6 +372,17 @@ export default function BusBoard() {
             ))}
           </div>
         </div>
+
+        {hasMinibusError && (
+          <p role="status" className="mt-2 text-sm text-destructive">
+            小巴到站資料暫時無法連線，正在重試。
+          </p>
+        )}
+        {unavailableMinibusRoutes.length > 0 && (
+          <p role="status" className="mt-2 text-sm text-muted-foreground">
+            小巴 {unavailableMinibusRoutes.join("、")} 暫未提供到站預報。
+          </p>
+        )}
 
         <div className="grid grid-cols-[1fr_auto] gap-4 pb-2 mt-2 border-b border-foreground items-end font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
           <div className="flex items-center gap-3">

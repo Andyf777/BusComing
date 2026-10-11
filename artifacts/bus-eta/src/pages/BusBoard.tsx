@@ -9,7 +9,7 @@ const REFRESH_MS = 15_000;
 
 // Shared bus/mini-bus stop location
 const CTB_STOP_ID = "001016";        // CTB stop — 鴨巴甸街, 堅道
-const KMB_103_STOP_ID = "7FAF7F6B57A8B606"; // KMB stop — 鴨巴甸街, 堅道
+const KMB_103_STOP_ID = "2ECC1DBA0C28E93C"; // KMB stop — 鴨巴甸街, 堅道, 往竹園邨
 const GMB_STOP_ID = 20000018;         // GMB stop — 堅道, 城皇街
 const GMB_ROUTE_ID = 2006738;         // GMB route 31 route_id
 
@@ -17,6 +17,7 @@ interface RouteSource {
   key: string;
   displayRoute: string;
   type: "bus" | "minibus";
+  etaDirection?: "I" | "O";
   fetchFn: () => Promise<EtaEntry[]>;
 }
 
@@ -37,12 +38,14 @@ const ROUTE_SOURCES: RouteSource[] = [
     key: "ctb-103",
     displayRoute: "103",
     type: "bus",
+    etaDirection: "O", // CTB outbound is toward 竹園邨.
     fetchFn: () => getCtbEta("CTB", CTB_STOP_ID, "103"),
   },
   {
     key: "kmb-103",
     displayRoute: "103",
     type: "bus",
+    etaDirection: "I", // KMB uses the opposite direction code for the same destination.
     fetchFn: () => getKmbEta(KMB_103_STOP_ID, "103", 1),
   },
   {
@@ -307,6 +310,7 @@ export default function BusBoard() {
   etaQueries.forEach((q, i) => {
     const src = ROUTE_SOURCES[i];
     (q.data ?? []).forEach((entry) => {
+      if (src.etaDirection && entry.dir !== src.etaDirection) return;
       if (!entry.eta) return;
       const key = `${src.displayRoute}-${entry.eta}`;
       if (seen.has(key)) return;

@@ -131,13 +131,33 @@ function useAllEtas() {
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-function RouteBadge({ type, label }: { type: "bus" | "minibus"; label: string }) {
+type RouteStatus = "ready" | "loading" | "unavailable" | "error";
+
+function RouteBadge({ type, label, status = "ready" }: {
+  type: "bus" | "minibus";
+  label: string;
+  status?: RouteStatus;
+}) {
   const isMinibus = type === "minibus";
+  const statusLabel = {
+    ready: "已有到站預報",
+    loading: "載入中",
+    unavailable: "暫未提供到站預報",
+    error: "連線失敗，正在重試",
+  }[status];
+  const colors = status === "error"
+    ? "bg-orange-100 text-orange-800 border-orange-500"
+    : status === "loading" || status === "unavailable"
+      ? "bg-stone-200 text-stone-600 border-stone-400"
+      : isMinibus
+        ? "bg-foreground text-background border-foreground"
+        : "bg-transparent text-foreground border-foreground";
   return (
     <span
-      className={`font-mono text-sm tracking-tight leading-none px-2 py-1 shrink-0 min-w-[44px] text-center border border-foreground ${
-        isMinibus ? "bg-foreground text-background" : "bg-transparent text-foreground"
-      }`}
+      data-status={status}
+      title={statusLabel}
+      aria-label={`${isMinibus ? "小巴" : "巴士"} ${label}：${statusLabel}`}
+      className={`font-mono text-sm tracking-tight leading-none px-2 py-1 shrink-0 min-w-[44px] text-center border ${colors}`}
     >
       {label}
     </span>
@@ -280,16 +300,18 @@ export default function BusBoard() {
   const isLoading = etaQueries.some((q) => q.isLoading);
   const isError = etaQueries.every((q) => q.isError);
   const isFetching = etaQueries.some((q) => q.isFetching);
-  const minibusSources = ROUTE_SOURCES
-    .map((src, i) => ({ src, query: etaQueries[i] }))
-    .filter(({ src }) => src.type === "minibus");
-  const hasMinibusError = minibusSources.some(({ query }) => query.isError);
-  const unavailableMinibusRoutes = [...new Set(minibusSources.map(({ src }) => src.displayRoute))]
-    .filter((route) => {
-      const queries = minibusSources.filter(({ src }) => src.displayRoute === route);
-      return queries.every(({ query }) => !query.isLoading && !query.isError &&
-        !(query.data ?? []).some((entry) => entry.eta));
-    });
+
+  function getRouteStatus(route: string): RouteStatus {
+    const sources = ROUTE_SOURCES
+      .map((src, i) => ({ src, query: etaQueries[i] }))
+      .filter(({ src }) => src.displayRoute === route);
+    if (sources.some(({ src, query }) => !query.isError &&
+      (query.data ?? []).some((entry) => entry.eta &&
+        (!src.etaDirection || entry.dir === src.etaDirection)))) return "ready";
+    if (sources.some(({ query }) => query.isLoading)) return "loading";
+    if (sources.some(({ query }) => query.isError)) return "error";
+    return "unavailable";
+  }
 
   function refetchAll() {
     etaQueries.forEach((q) => q.refetch());
@@ -368,21 +390,11 @@ export default function BusBoard() {
           </span>
           <div className="flex flex-wrap gap-1.5 flex-1">
             {headerRoutes.map((src) => (
-              <RouteBadge key={src.key} type={src.type} label={src.displayRoute} />
+              <RouteBadge key={src.key} type={src.type} label={src.displayRoute}
+                status={getRouteStatus(src.displayRoute)} />
             ))}
           </div>
         </div>
-
-        {hasMinibusError && (
-          <p role="status" className="mt-2 text-sm text-destructive">
-            小巴到站資料暫時無法連線，正在重試。
-          </p>
-        )}
-        {unavailableMinibusRoutes.length > 0 && (
-          <p role="status" className="mt-2 text-sm text-muted-foreground">
-            小巴 {unavailableMinibusRoutes.join("、")} 暫未提供到站預報。
-          </p>
-        )}
 
         <div className="grid grid-cols-[1fr_auto] gap-4 pb-2 mt-2 border-b border-foreground items-end font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
           <div className="flex items-center gap-3">

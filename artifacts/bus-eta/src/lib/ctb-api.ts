@@ -1,6 +1,7 @@
 const CTB_BASE = "/api/ctb";
 const KMB_BASE = "/api/kmb";
 const GMB_BASE = "/api/gmb";
+const GMB_DIRECT_BASE = "https://data.etagmb.gov.hk";
 
 export interface RouteStop {
   co: string;
@@ -108,13 +109,29 @@ export async function getKmbEta(
 
 // ─── GMB ─────────────────────────────────────────────────────────────────────
 
+// The official GMB endpoint supports browser CORS. Fetch it directly so a
+// failed Pages-to-GMB connection does not hide every minibus route. Retain the
+// same-origin proxy as a fallback and share concurrent requests for one stop.
+const gmbStopRequests = new Map<number, Promise<GmbStopEtaResponse>>();
+
+function getGmbStopEta(stopId: number): Promise<GmbStopEtaResponse> {
+  const existing = gmbStopRequests.get(stopId);
+  if (existing) return existing;
+
+  const request = getRaw<GmbStopEtaResponse>(`${GMB_DIRECT_BASE}/eta/stop/${stopId}`)
+    .catch(() => getRaw<GmbStopEtaResponse>(`${GMB_BASE}/eta/stop/${stopId}`))
+    .finally(() => gmbStopRequests.delete(stopId));
+  gmbStopRequests.set(stopId, request);
+  return request;
+}
+
 export async function getGmbEta(
   stopId: number,
   routeId: number,
   destTc: string,
   destEn: string
 ): Promise<EtaEntry[]> {
-  const res = await getRaw<GmbStopEtaResponse>(`${GMB_BASE}/eta/stop/${stopId}`);
+  const res = await getGmbStopEta(stopId);
   const match = res.data.find((r) => r.route_id === routeId);
   if (!match || !match.enabled) return [];
 

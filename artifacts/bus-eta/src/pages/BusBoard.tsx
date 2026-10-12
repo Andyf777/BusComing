@@ -21,7 +21,7 @@ interface RouteSource {
   fetchFn: () => Promise<EtaEntry[]>;
 }
 
-const ROUTE_SOURCES: RouteSource[] = [
+const ABERDEEN_ROUTES: RouteSource[] = [
   {
     key: "ctb-13",
     displayRoute: "13",
@@ -98,6 +98,40 @@ const ROUTE_SOURCES: RouteSource[] = [
   },
 ];
 
+interface Station {
+  id: string;
+  label: string;
+  name: string;
+  ctbStopId: string;
+  routes: RouteSource[];
+}
+
+const STATIONS: Station[] = [
+  {
+    id: "aberdeen",
+    label: "鴨巴甸街",
+    name: "鴨巴甸街, 堅道",
+    ctbStopId: CTB_STOP_ID,
+    routes: ABERDEEN_ROUTES,
+  },
+  {
+    id: "ladder",
+    label: "樓梯街",
+    name: "樓梯街, 堅道",
+    ctbStopId: "001015",
+    routes: [
+      { key: "ctb-103", displayRoute: "103", type: "bus", etaDirection: "O",
+        fetchFn: () => getCtbEta("CTB", "001015", "103") },
+      { key: "kmb-103", displayRoute: "103", type: "bus", etaDirection: "I",
+        fetchFn: () => getKmbEta("7D77D56CB708BCED", "103", 1) },
+      { key: "ctb-40m", displayRoute: "40M", type: "bus", etaDirection: "O",
+        fetchFn: () => getCtbEta("CTB", "001015", "40M") },
+      { key: "gmb-31", displayRoute: "31", type: "minibus",
+        fetchFn: () => getGmbEta(20000017, 2006738, "銅鑼灣(謝斐道)", "Causeway Bay (Jaffe Road)") },
+    ],
+  },
+];
+
 // ─── Extended entry type ──────────────────────────────────────────────────────
 
 interface RichEtaEntry extends EtaEntry {
@@ -107,20 +141,20 @@ interface RichEtaEntry extends EtaEntry {
 
 // ─── Hooks ───────────────────────────────────────────────────────────────────
 
-function useStopDetail() {
+function useStopDetail(station: Station) {
   return useQueries({
     queries: [{
-      queryKey: ["stop-detail", CTB_STOP_ID],
-      queryFn: () => getStopDetail(CTB_STOP_ID),
+      queryKey: ["stop-detail", station.ctbStopId],
+      queryFn: () => getStopDetail(station.ctbStopId),
       staleTime: 60 * 60_000,
     }],
   })[0];
 }
 
-function useAllEtas() {
+function useAllEtas(station: Station) {
   return useQueries({
-    queries: ROUTE_SOURCES.map((src) => ({
-      queryKey: ["eta", src.key],
+    queries: station.routes.map((src) => ({
+      queryKey: ["eta", station.id, src.key],
       queryFn: src.fetchFn,
       refetchInterval: REFRESH_MS,
       staleTime: 10_000,
@@ -293,16 +327,54 @@ function SyncButton({
 // ─── Main board ──────────────────────────────────────────────────────────────
 
 export default function BusBoard() {
-  const stopQuery = useStopDetail();
-  const etaQueries = useAllEtas();
+  const [selectedId, setSelectedId] = React.useState(STATIONS[0].id);
+  const station = STATIONS.find((item) => item.id === selectedId)!;
 
-  const stopName = stopQuery.data?.name_tc ?? stopQuery.data?.name_en ?? "鴨巴甸街, 堅道";
+  function handleTabKey(event: React.KeyboardEvent<HTMLButtonElement>, index: number) {
+    let next: number;
+    if (event.key === "ArrowRight") next = (index + 1) % STATIONS.length;
+    else if (event.key === "ArrowLeft") next = (index + STATIONS.length - 1) % STATIONS.length;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = STATIONS.length - 1;
+    else return;
+    event.preventDefault();
+    setSelectedId(STATIONS[next].id);
+    document.getElementById(`station-tab-${STATIONS[next].id}`)?.focus();
+  }
+
+  return (
+    <div className="min-h-screen bg-background text-foreground p-4 md:p-8 selection:bg-foreground selection:text-background">
+      <div role="tablist" aria-label="選擇車站" className="flex gap-2 mb-4 border-b border-muted-foreground/30 pb-3">
+        {STATIONS.map((item, index) => (
+          <button key={item.id} id={`station-tab-${item.id}`} role="tab"
+            type="button" aria-selected={selectedId === item.id}
+            aria-controls={`station-panel-${item.id}`} tabIndex={selectedId === item.id ? 0 : -1}
+            onClick={() => setSelectedId(item.id)} onKeyDown={(event) => handleTabKey(event, index)}
+            className={`flex-1 sm:flex-none border px-4 py-2 text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground ${
+              selectedId === item.id ? "bg-foreground text-background border-foreground" : "bg-transparent text-muted-foreground border-muted-foreground/40"
+            }`}>
+            {item.label}
+          </button>
+        ))}
+      </div>
+      <div role="tabpanel" id={`station-panel-${station.id}`} aria-labelledby={`station-tab-${station.id}`}>
+        <StationBoard key={station.id} station={station} />
+      </div>
+    </div>
+  );
+}
+
+function StationBoard({ station }: { station: Station }) {
+  const stopQuery = useStopDetail(station);
+  const etaQueries = useAllEtas(station);
+
+  const stopName = stopQuery.data?.name_tc ?? stopQuery.data?.name_en ?? station.name;
   const isLoading = etaQueries.some((q) => q.isLoading);
   const isError = etaQueries.every((q) => q.isError);
   const isFetching = etaQueries.some((q) => q.isFetching);
 
   function getRouteStatus(route: string): RouteStatus {
-    const sources = ROUTE_SOURCES
+    const sources = station.routes
       .map((src, i) => ({ src, query: etaQueries[i] }))
       .filter(({ src }) => src.displayRoute === route);
     if (sources.some(({ src, query }) => !query.isError &&
@@ -340,7 +412,7 @@ export default function BusBoard() {
   const allEntries: RichEtaEntry[] = [];
 
   etaQueries.forEach((q, i) => {
-    const src = ROUTE_SOURCES[i];
+    const src = station.routes[i];
     (q.data ?? []).forEach((entry) => {
       if (src.etaDirection && entry.dir !== src.etaDirection) return;
       if (!entry.eta) return;
@@ -356,7 +428,7 @@ export default function BusBoard() {
   // Unique routes for the header (in display order, no duplicates)
   const headerRoutes: RouteSource[] = [];
   const seen2 = new Set<string>();
-  for (const src of ROUTE_SOURCES) {
+  for (const src of station.routes) {
     if (!seen2.has(src.displayRoute)) {
       seen2.add(src.displayRoute);
       headerRoutes.push(src);
@@ -364,7 +436,7 @@ export default function BusBoard() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col p-4 md:p-8 selection:bg-foreground selection:text-background">
+    <div className="flex flex-col">
       {/* Header */}
       <header className="flex flex-row items-end justify-between pb-3 border-b-2 border-accent">
         <div className="flex flex-col gap-0.5">

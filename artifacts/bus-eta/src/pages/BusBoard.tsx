@@ -1,4 +1,5 @@
 import React from "react";
+import { SHUTTLE_TIMETABLE, getShuttleDepartures } from "@/lib/shuttle";
 import { useQueries } from "@tanstack/react-query";
 import { getCtbEta, getKmbEta, getGmbEta, getStopDetail, type EtaEntry } from "@/lib/ctb-api";
 import { formatEta, formatTime, minutesUntil } from "@/lib/utils";
@@ -124,6 +125,8 @@ const STATIONS: Station[] = [
         fetchFn: () => getCtbEta("CTB", "001893", "952") },
       { key: "gmb-140m", displayRoute: "140M", type: "minibus",
         fetchFn: () => getGmbEta(20002043, 2004598, "青衣站", "Tsing Yi Station") },
+      { key: "shuttle-tsuen-wan", displayRoute: "穿梭", type: "bus",
+        fetchFn: async () => getShuttleDepartures() },
     ],
   },
 ];
@@ -220,7 +223,9 @@ function EtaRow({ entry }: { entry: RichEtaEntry }) {
             isArriving ? "text-accent" : "text-foreground"
           }`}
         >
-          {formatEta(entry.eta)}
+          {entry.co === "SHUTTLE" && mins !== null && mins <= 1
+            ? (mins <= 0 ? "開出" : "即將開出")
+            : formatEta(entry.eta)}
         </div>
         {entry.eta && (
           <div className="text-muted-foreground font-mono text-xs tabular-nums uppercase tracking-widest">
@@ -538,30 +543,6 @@ function LiveClock() {
     </div>
   );
 }
-
-// Printed timetable supplied by the user, effective 1 October 2023.
-// Only the GPVH departure columns toward Tsuen Wan MTR are included.
-function timetableRange(start: number, end: number, interval: number): string[] {
-  const times: string[] = [];
-  for (let minutes = start; minutes <= end; minutes += interval) {
-    times.push(`${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`);
-  }
-  return times;
-}
-
-const SHUTTLE_TIMETABLE = [
-  { label: "星期一至五", times: [
-    ...timetableRange(390, 540, 15),
-    ...timetableRange(570, 960, 30),
-    ...timetableRange(980, 1200, 20),
-    ...timetableRange(1230, 1380, 30),
-  ] },
-  { label: "星期六", times: [
-    ...timetableRange(390, 540, 15),
-    ...timetableRange(570, 1380, 30),
-  ] },
-  { label: "星期日及公眾假期", times: timetableRange(420, 1380, 30) },
-];
 
 function TsuenWanShuttleTimetable() {
   return (

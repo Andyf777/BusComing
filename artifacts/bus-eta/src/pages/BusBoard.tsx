@@ -340,14 +340,14 @@ export default function BusBoard() {
 
   return (
     <div className="min-h-screen bg-background text-foreground p-4 md:p-8 selection:bg-foreground selection:text-background">
-      <div role="tablist" aria-label="選擇車站" className="flex gap-2 mb-4 border-b border-muted-foreground/30 pb-3">
+      <div role="tablist" aria-label="選擇車站" className="flex items-stretch gap-4 mb-5">
         {STATIONS.map((item, index) => (
           <button key={item.id} id={`station-tab-${item.id}`} role="tab"
             type="button" aria-selected={selectedId === item.id}
             aria-controls={`station-panel-${item.id}`} tabIndex={selectedId === item.id ? 0 : -1}
             onClick={() => setSelectedId(item.id)} onKeyDown={(event) => handleTabKey(event, index)}
-            className={`flex-1 sm:flex-none border px-4 py-2 text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground ${
-              selectedId === item.id ? "bg-foreground text-background border-foreground" : "bg-transparent text-muted-foreground border-muted-foreground/40"
+            className={`min-w-28 border-b-[3px] px-4 pt-2 pb-3 text-lg font-medium bg-transparent transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground ${
+              selectedId === item.id ? "text-foreground border-foreground" : "text-muted-foreground border-transparent hover:text-foreground"
             }`}>
             {item.label}
           </button>

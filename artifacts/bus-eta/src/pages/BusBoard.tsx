@@ -355,6 +355,7 @@ export default function BusBoard() {
       </div>
       <div role="tabpanel" id={`station-panel-${station.id}`} aria-labelledby={`station-tab-${station.id}`}>
         <StationBoard key={station.id} station={station} />
+        {station.id === "siu-lam" && <TsuenWanShuttleTimetable />}
       </div>
     </div>
   );
@@ -535,5 +536,54 @@ function LiveClock() {
         })}
       </div>
     </div>
+  );
+}
+
+// Printed timetable supplied by the user, effective 1 October 2023.
+// Only the GPVH departure columns toward Tsuen Wan MTR are included.
+function timetableRange(start: number, end: number, interval: number): string[] {
+  const times: string[] = [];
+  for (let minutes = start; minutes <= end; minutes += interval) {
+    times.push(`${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`);
+  }
+  return times;
+}
+
+const SHUTTLE_TIMETABLE = [
+  { label: "星期一至五", times: [
+    ...timetableRange(390, 540, 15),
+    ...timetableRange(570, 960, 30),
+    ...timetableRange(980, 1200, 20),
+    ...timetableRange(1230, 1380, 30),
+  ] },
+  { label: "星期六", times: [
+    ...timetableRange(390, 540, 15),
+    ...timetableRange(570, 1380, 30),
+  ] },
+  { label: "星期日及公眾假期", times: timetableRange(420, 1380, 30) },
+];
+
+function TsuenWanShuttleTimetable() {
+  return (
+    <details className="mt-6 border-t-2 border-accent pt-3">
+      <summary className="cursor-pointer font-bold text-base py-2 focus-visible:outline-2 focus-visible:outline-foreground">
+        荃灣穿梭巴士時間表 · 浪／海琴軒開出
+      </summary>
+      <p className="text-xs text-muted-foreground mt-1 mb-3">
+        按提供時間表（2023年10月1日起生效），往港鐵荃灣站，以下為固定開出時間。
+      </p>
+      <div className="grid grid-cols-3 gap-2 md:gap-4">
+        {SHUTTLE_TIMETABLE.map((day) => (
+          <section key={day.label} aria-label={day.label} className="border border-muted-foreground/30">
+            <h2 className="font-bold text-xs md:text-sm text-center p-2 border-b border-foreground min-h-12 flex items-center justify-center">
+              {day.label}
+            </h2>
+            <ul className="text-center font-mono text-sm tabular-nums">
+              {day.times.map((time) => <li key={time} className="py-1 border-b border-muted-foreground/20 last:border-b-0">{time}</li>)}
+            </ul>
+          </section>
+        ))}
+      </div>
+    </details>
   );
 }
